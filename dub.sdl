@@ -1,0 +1,11 @@
+name "daud"
+description "D audio toolkit"
+copyright "Copyright © 2016, Tanel Tagaväli"
+authors "Tanel Tagaväli<tanel58@hotmail.com>"
+
+dependency "alsa-lib" version="~>1.0.0+1.0.27.2"
+
+configuration "app" {
+	targetType "executable"
+	targetPath "bin/"
+}
