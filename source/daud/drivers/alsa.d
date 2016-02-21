@@ -12,7 +12,7 @@ final class AudioDevice
 
 	import deimos.alsa.pcm : snd_pcm_stream_t;
 	import deimos.alsa.pcm : snd_pcm_format_t;
-	this(snd_pcm_stream_t stream_type, snd_pcm_format_t format)
+	this(snd_pcm_stream_t stream_type, snd_pcm_format_t format, int async = 0, uint sample_rate = 48_000)
 	{
 		import deimos.alsa.pcm : snd_pcm_open;
 		import std.string : toStringz;
@@ -46,7 +46,6 @@ final class AudioDevice
 			// throw
 		}
 
-		uint sample_rate = 44100;
 		int dir = 0;
 		import deimos.alsa.pcm : snd_pcm_hw_params_set_rate_near;
 		if (int err = snd_pcm_hw_params_set_rate_near(handle, hw_params, &sample_rate, &dir) < 0)
@@ -69,6 +68,12 @@ final class AudioDevice
 
 		import deimos.alsa.pcm : snd_pcm_hw_params_free;
 		snd_pcm_hw_params_free(hw_params);
+
+		import deimos.alsa.pcm : snd_pcm_nonblock;
+		if (int err = snd_pcm_nonblock(handle, async))
+		{
+			// throw
+		}
 
 		import deimos.alsa.pcm : snd_pcm_prepare;
 		if (int err = snd_pcm_prepare(handle) < 0)
