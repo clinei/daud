@@ -13,10 +13,10 @@ auto sine(T)(uint frequency, ulong sampleRate)
 	import std.math : PI;
 	import std.algorithm : map;
 	import std.math : sin;
-	return saw!T(frequency, sampleRate, 2 * PI).map!sin;
+	return saw!T(frequency, sampleRate, 2 * PI, 0).map!sin;
 }
 
-auto saw(T)(uint frequency, ulong sampleRate, T scale = 1)
+auto saw(T)(uint frequency, ulong sampleRate, T scale = 1, T offset = -(1 / 2))
 {
 	// bigger frequency => smaller period
 
@@ -31,5 +31,5 @@ auto saw(T)(uint frequency, ulong sampleRate, T scale = 1)
 	import std.math : PI;
 	import std.algorithm : map;
 	import std.math : sin;
-	return iota!(T, T, T)(0, scale, step * scale);
+	return iota!(T, T, T)(offset, scale - offset, step * scale);
 }
