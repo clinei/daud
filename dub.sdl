@@ -9,9 +9,3 @@ configuration "app" {
 	targetType "executable"
 	targetPath "bin/"
 }
-
-configuration "dynbuf" {
-	targetType "executable"
-	targetPath "bin/"
-	versions "dynbuf"
-}

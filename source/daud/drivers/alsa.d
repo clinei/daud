@@ -86,7 +86,7 @@ final class AudioDevice
 	void write(Buffer)(auto ref Buffer buffer)
 	{
 		import deimos.alsa.pcm : snd_pcm_writei;
-		if (int err = snd_pcm_writei(handle, &buffer, buffer.length) != buffer.length)
+		if (int err = snd_pcm_writei(handle, buffer.ptr, buffer.length) != buffer.length)
 		{
 			// throw
 		}
