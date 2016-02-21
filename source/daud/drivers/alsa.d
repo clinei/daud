@@ -77,7 +77,13 @@ final class AudioDevice
 		}
 	}
 
-	void write(Buffer)(Buffer buffer)
+	~this()
+	{
+		import deimos.alsa.pcm : snd_pcm_close;
+		snd_pcm_close(handle);
+	}
+
+	void write(Buffer)(auto ref Buffer buffer)
 	{
 		import deimos.alsa.pcm : snd_pcm_writei;
 		if (int err = snd_pcm_writei(handle, &buffer, buffer.length) != buffer.length)
