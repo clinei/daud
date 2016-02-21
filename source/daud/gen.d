@@ -25,7 +25,7 @@ auto saw(T)(uint frequency, ulong sampleRate, T scale = 1, T offset = -(1 / 2))
 
 	// smaller period => bigger step
 
-	T step = 1.seconds.total!"hnsecs" / T(period.total!"hnsecs") / T(sampleRate);
+	T step = T(1.seconds / period) / T(sampleRate);
 
 	import std.range : iota;
 	import std.math : PI;
