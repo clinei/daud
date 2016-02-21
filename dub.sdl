@@ -5,7 +5,20 @@ authors "Tanel Tagaväli<tanel58@hotmail.com>"
 
 dependency "alsa-lib" version="~>1.0.0+1.0.27.2"
 
-configuration "app" {
+configuration "noise" {
 	targetType "executable"
 	targetPath "bin/"
+	versions "noise"
+}
+
+configuration "sine" {
+	targetType "executable"
+	targetPath "bin/"
+	versions "sine" "wave"
+}
+
+configuration "saw" {
+	targetType "executable"
+	targetPath "bin/"
+	versions "saw" "wave"
 }
