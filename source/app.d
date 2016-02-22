@@ -1,14 +1,14 @@
 void main()
 {
-	uint sampleRate = 48_000;
+	uint sampleRate = 4_000;
 
-	size_t bufSize = sampleRate / (2 ^^ 0);
+	size_t bufSize = sampleRate;
 
 	import std.typecons : scoped;
 	import daud.drivers.alsa : AudioDevice;
 	import deimos.alsa.pcm : snd_pcm_stream_t;
 	import deimos.alsa.pcm : snd_pcm_format_t;
-	auto device = scoped!AudioDevice(snd_pcm_stream_t.PLAYBACK, snd_pcm_format_t.FLOAT, sampleRate, bufSize, 1);
+	auto device = scoped!AudioDevice(snd_pcm_stream_t.PLAYBACK, snd_pcm_format_t.FLOAT, sampleRate, bufSize, 0);
 
 	version(noise)
 	{
@@ -20,7 +20,7 @@ void main()
 	}
 	else version(wave)
 	{
-		float freq = 31.415;
+		float freq = 100;
 
 		version(saw)
 		{

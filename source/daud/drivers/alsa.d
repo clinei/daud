@@ -35,7 +35,7 @@ final class AudioDevice
 
 		import deimos.alsa.pcm : snd_pcm_hw_params_set_access;
 		import deimos.alsa.pcm : snd_pcm_access_t;
-		if (int err = snd_pcm_hw_params_set_access(handle, hw_params, snd_pcm_access_t.RW_INTERLEAVED) < 0)
+		if (int err = snd_pcm_hw_params_set_access(handle, hw_params, snd_pcm_access_t.RW_NONINTERLEAVED) < 0)
 		{
 			// throw
 		}
@@ -59,7 +59,7 @@ final class AudioDevice
 		}
 
 		import deimos.alsa.pcm : snd_pcm_hw_params_set_channels;
-		uint channels = 2;
+		uint channels = 1;
 		if (int err = snd_pcm_hw_params_set_channels(handle, hw_params, channels) < 0)
 		{
 			// throw
@@ -95,8 +95,9 @@ final class AudioDevice
 
 	void write(Buffer)(auto ref Buffer buffer)
 	{
-		import deimos.alsa.pcm : snd_pcm_writei;
-		if (int err = snd_pcm_writei(handle, buffer.ptr, buffer.length) != buffer.length)
+		auto buffers = [buffer.ptr];
+		import deimos.alsa.pcm : snd_pcm_writen;
+		if (int err = snd_pcm_writen(handle, cast(void**)buffers.ptr, buffer.length) != buffer.length)
 		{
 			// throw
 		}
