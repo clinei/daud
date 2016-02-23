@@ -42,33 +42,41 @@ final class Saw(T, F) : Generator!(T, F)
 
 	ulong _sampleRate;
 
-	T _step;
-
 	VariableStepIota!(T, T, T) _iota;
 
-	T _scale;
-
-	T _offset;
-
-	this(F frequency = 440, ulong sampleRate = 48_000, T scale = 1, T offset = -(1 / 2))
+	this(F frequency = 440, ulong sampleRate = 48_000, T scale = 1, T offset = 0)
 	{
 		_sampleRate = sampleRate;
-		_scale = scale;
-		_offset = offset;
+
 		this.frequency(frequency);
+		_iota = typeof(_iota)(offset, scale - offset, step * scale);
+
+	}
+	this(F frequency, ulong sampleRate, typeof(_iota) iota)
+	{
+		_sampleRate = sampleRate;
+		_iota = iota;
+		this.frequency = frequency;
 	}
 
+	T step()
+	{
+		return T(_frequency) / T(_sampleRate);
+	}
+
+	F frequency()
+	{
+		return _frequency;
+	}
 	void frequency(F frequency)
 	{
 		_frequency = frequency;
-		_step = T(_frequency) / T(_sampleRate);
-
-		_iota = typeof(_iota)(_offset, _scale - _offset, _step * _scale);
+		_iota.step = step;
 	}
 
 	Saw!(T, F) dup()
 	{
-		return new Saw!(T, F)(_frequency, _sampleRate, _scale, _offset);
+		return new Saw!(T, F)(_frequency, _sampleRate, _iota);
 	}
 
 	Saw!(T, F) save()
@@ -82,8 +90,23 @@ unittest
 {
 	auto sw = new Saw!(float, float)(1, 4);
 
+	assert(!sw.empty);
+
 	import std.math : approxEqual;
 	assert(sw.front.approxEqual(0));
+	sw.popFront();
+	assert(sw.front.approxEqual(0.25));
+	sw.popFront();
+	assert(sw.front.approxEqual(0.5));
+
+	assert(!sw.empty);
+
+	sw.popFront();
+	assert(sw.front.approxEqual(0.75));
+	sw.popFront();
+	assert(sw.front.approxEqual(1));
+
+	assert(sw.empty);
 }
 
 struct RangeRepeat(R)
@@ -129,9 +152,9 @@ RangeRepeat!R rangeRepeat(R)(R range)
 }
 unittest
 {
-	auto r = new Saw!(float, float)(1, 4);
+	auto sw = new Saw!(float, float)(1, 4);
 
-	auto rep = rangeRepeat(r);
+	auto rep = rangeRepeat(sw);
 }
 
 struct RepeatingGenerator(G : Generator!(T, F), T, F)
@@ -158,9 +181,8 @@ struct RepeatingGenerator(G : Generator!(T, F), T, F)
 	import std.range : Take;
 	Take!(typeof(_repeat)) front()
 	{
-		import std.experimental.logger : log;
-		import std.range : take;
-		return _repeat.take(_frontSize);
+		import std.range : takeExactly;
+		return _repeat.takeExactly(_frontSize);
 	}
 
 	void popFront()
@@ -169,23 +191,44 @@ struct RepeatingGenerator(G : Generator!(T, F), T, F)
 		_repeat.popFrontN(_frontSize);
 	}
 
-	void frequency(F frequency)
+	F frequency()
 	{
+		return _generator.frequency;
+	}
+	// `cont` is hack
+	void frequency(F frequency, T cont)
+	{
+		import std.experimental.logger : log;
+
+		// is wrong at 2000
+// 		auto prev = _repeat.front;
+		auto prev = cont;
 		_generator.frequency = frequency;
+
+		_repeat.reset();
+
+		import std.algorithm : countUntil;
+		auto n = _repeat.countUntil!("a > b")(prev);
+
+		static if (false)
+		{
+			log(prev);
+			log(_repeat.front);
+		}
 	}
 }
-auto repeatingGenerator(G)(G generator, size_t frontSize = 1)
+auto repeatingGenerator(G : Generator!(T, F), T, F)(G generator, size_t frontSize = 1)
 {
-	import std.traits : TemplateArgsOf;
-	alias args = TemplateArgsOf!G;
-	return RepeatingGenerator!(G, args[0], args[1])(generator, frontSize);
+	return RepeatingGenerator!(G, T, F)(generator, frontSize);
 }
-/+
+
 unittest
 {
-	auto r = [1, 2, 3, 4, 5];
-	auto gen = repeatingGenerator(r, 2);
+	auto sw = new Saw!(float, float)(1, 4);
 
+	auto gen = repeatingGenerator(sw, 2);
+
+	/+
 	import std.algorithm : equal;
 	assert(gen.front.equal([1, 2]));
 
@@ -203,73 +246,148 @@ unittest
 
 	gen.popFront();
 	assert(gen.front.equal([1, 2]));
+	+/
 }
-+/
 
-private
-struct VariableStepIota(B, E, S)
+// TODO: optimize for unsigned step
+struct VariableStepIota(L, H, S)
 {
 	import std.traits : CommonType;
-	alias T = CommonType!(B, E);
+	alias T = CommonType!(L, H);
 	private
 	{
-		B begin;
-		E end;
-		T curr;
+		L _low;
+		H _high;
+		T _curr;
 	}
 	S step;
 
-	this(B begin, E end, S step)
+	this(L low, H high, S step, T curr)
 	{
-		this.begin = begin;
-		this.end = end;
+		_low = low;
+		_high = high;
 		this.step = step;
 
-		curr = begin;
+		_curr = curr;
+	}
+	this(L low, H high, S step)
+	{
+		import std.traits : isSigned;
+		static if (isSigned!S)
+		{
+			if (step > 0)
+			{
+				this(low, high, step, low);
+			}
+			else
+			{
+				this(low, high, step, high);
+			}
+		}
+		else
+		{
+			this(low, high, step, low);
+		}
 	}
 
 	bool empty()
 	{
-		return curr >= end;
+		import std.traits : isSigned;
+		static if (isSigned!S)
+		{
+			if (step > 0)
+			{
+				return _curr >= _high || _curr < _low;
+			}
+			else if (step <= 0)
+			{
+				return _curr > _high || _curr <= _low;
+			}
+			else
+			{
+				return true;
+			}
+		}
+		else
+		{
+			return _curr >= _high;
+		}
 	}
 
 	T front()
 	{
-		return curr;
+		return _curr;
 	}
 
+	/++
+	probably does a lot more than is needed,
+	but guarantees staying within bounds,
+	even when they are `type.max` or `type.min`
+	++/
 	void popFront()
 	{
-		curr += step;
+		import std.traits : isSigned;
+		static if (isSigned!S)
+		{
+			if (step > 0 && (_high - step < _curr))
+			{
+				_curr = _high;
+			}
+			else if (step <= 0 && (_low + step > _curr))
+			{
+				_curr = _low;
+			}
+			else
+			{
+				_curr += step;
+			}
+		}
+		else
+		{
+			if (_high - step < _curr)
+			{
+				_curr = _high;
+			}
+			else
+			{
+				_curr += step;
+			}
+		}
 	}
 
+	// FIXME: doesn't work for negative step
 	size_t length()
 	{
 		import std.math : ceil;
 		import std.conv : to;
-		return ceil((end - curr) / step).to!size_t;
+		return ceil((_high - _curr) / step).to!size_t;
 	}
 }
-auto variableStepIota(B, E, S)(B begin, E end, S step)
+auto variableStepIota(L, H, S)(L low, H high, S step)
+{
+	return variableStepIota(low, high, step, low);
+}
+auto variableStepIota(L, H, S, C)(L low, H high, S step, C curr)
 {
 	import std.traits : CommonType;
-	alias T = CommonType!(B, E, S);
-	return VariableStepIota!(T, T, T)(begin, end, step);
+	alias T = CommonType!(L, H, S, C);
+	return VariableStepIota!(T, T, T)(low, high, step, curr);
 }
 unittest
 {
-	auto r = variableStepIota(0, 1, 0.1);
+	auto r = variableStepIota(-1, 1, 0.1, -0.2);
 
-	assert(r.front == 0);
-
-	r.popFront();
-	r.popFront();
-	r.popFront();
 	import std.math : approxEqual;
-	assert(r.front.approxEqual(0.3));
+	assert(r.front.approxEqual(-0.2));
 
-	r.step = 0.2;
 	r.popFront();
 	r.popFront();
-	assert(r.front.approxEqual(0.7));
+	r.popFront();
+	assert(r.front.approxEqual(0.1));
+
+	r.step = -0.2;
+	r.popFront();
+	r.popFront();
+	r.popFront();
+	assert(r.front.approxEqual(-0.5));
 }

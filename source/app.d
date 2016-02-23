@@ -1,10 +1,11 @@
 void main()
 {
-	import std.experimental.logger : log;
+	static if (true)
+	{
+	uint sampleRate = 4_000;
 
-	uint sampleRate = 48_000;
-
-	size_t bufSize = sampleRate / (2 ^^ 8);
+// 	size_t bufSize = sampleRate / (2 ^^ 4);
+	size_t bufSize = 1000;
 
 	import std.typecons : scoped;
 	import daud.drivers.alsa : AudioDevice;
@@ -43,13 +44,21 @@ void main()
 
 	while (true)
 	{
-		wave._generator._frequency += 0.01;
-
 		import std.array : array;
 		auto buf = wave.front.array;
+
+		static if (false)
+		{
+			import std.algorithm : each;
+			import std.stdio : writeln;
+			buf.each!writeln;
+		}
 
 		device.write(buf);
 
 		wave.popFront();
+
+		wave.frequency(wave.frequency + 1, buf[$-1]);
+	}
 	}
 }
