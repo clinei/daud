@@ -1,8 +1,10 @@
 void main()
 {
-	uint sampleRate = 4_000;
+	import std.experimental.logger : log;
 
-	size_t bufSize = sampleRate;
+	uint sampleRate = 48_000;
+
+	size_t bufSize = sampleRate / (2 ^^ 8);
 
 	import std.typecons : scoped;
 	import daud.drivers.alsa : AudioDevice;
@@ -24,8 +26,8 @@ void main()
 
 		version(saw)
 		{
-			import daud.gen : saw;
-			auto form = saw!float(freq, sampleRate);
+			import daud.gen : Saw;
+			auto form = new Saw!(float, float)(freq, sampleRate);
 		}
 		else version(sine)
 		{
@@ -41,6 +43,8 @@ void main()
 
 	while (true)
 	{
+		wave._generator._frequency += 0.01;
+
 		import std.array : array;
 		auto buf = wave.front.array;
 

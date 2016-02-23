@@ -31,28 +31,124 @@ auto saw(T, F)(F frequency, ulong sampleRate, T scale = 1, T offset = -(1 / 2))
 	}
 }
 
-auto repeatingGenerator(R)(R range, size_t frontSize = 1)
+interface Generator(T, F)
 {
-	return RepeatingGenerator!R(range, frontSize);
+	void frequency(F frequency);
 }
 
-struct RepeatingGenerator(R)
+final class Saw(T, F) : Generator!(T, F)
+{
+	F _frequency;
+
+	ulong _sampleRate;
+
+	T _step;
+
+	VariableStepIota!(T, T, T) _iota;
+
+	T _scale;
+
+	T _offset;
+
+	this(F frequency = 440, ulong sampleRate = 48_000, T scale = 1, T offset = -(1 / 2))
+	{
+		_sampleRate = sampleRate;
+		_scale = scale;
+		_offset = offset;
+		this.frequency(frequency);
+	}
+
+	void frequency(F frequency)
+	{
+		_frequency = frequency;
+		_step = T(_frequency) / T(_sampleRate);
+
+		_iota = typeof(_iota)(_offset, _scale - _offset, _step * _scale);
+	}
+
+	Saw!(T, F) dup()
+	{
+		return new Saw!(T, F)(_frequency, _sampleRate, _scale, _offset);
+	}
+
+	Saw!(T, F) save()
+	{
+		return dup;
+	}
+
+	alias _iota this;
+}
+unittest
+{
+	auto sw = new Saw!(float, float)(1, 4);
+
+	import std.math : approxEqual;
+	assert(sw.front.approxEqual(0));
+}
+
+struct RangeRepeat(R)
 {
 	R _range;
 
-	import std.range : ElementType;
-	alias T = ElementType!R;
+	R _curr;
 
-	import std.range : repeat;
-	import std.algorithm : joiner;
-	typeof(_range.repeat.joiner) _repeat;
+	this(R range)
+	{
+		_range = range;
+		reset();
+	}
+
+	enum bool empty = false;
+
+	import std.range : ElementType;
+	ElementType!R front()
+	{
+		return _curr.front;
+	}
+
+	void popFront()
+	{
+		if (!_curr.empty)
+		{
+			_curr.popFront();
+		}
+		else
+		{
+			reset();
+		}
+	}
+
+	void reset()
+	{
+		_curr = _range.save();
+	}
+}
+RangeRepeat!R rangeRepeat(R)(R range)
+{
+	return RangeRepeat!R(range);
+}
+unittest
+{
+	auto r = new Saw!(float, float)(1, 4);
+
+	auto rep = rangeRepeat(r);
+}
+
+struct RepeatingGenerator(G : Generator!(T, F), T, F)
+{
+	G _generator;
+
+	import std.range : ElementType;
+	alias T = ElementType!G;
+
+	RangeRepeat!G _repeat;
 
 	size_t _frontSize;
 
-	this(R range, size_t frontSize = 1)
+	this(G generator, size_t frontSize = 1)
 	{
-		_range = range;
-		_repeat = _range.repeat.joiner;
+		_generator = generator;
+		_repeat = RangeRepeat!G(_generator);
 
 		_frontSize = frontSize;
 	}
@@ -62,6 +158,7 @@ struct RepeatingGenerator(R)
 	import std.range : Take;
 	Take!(typeof(_repeat)) front()
 	{
+		import std.experimental.logger : log;
 		import std.range : take;
 		return _repeat.take(_frontSize);
 	}
@@ -71,7 +168,19 @@ struct RepeatingGenerator(R)
 		import std.range : popFrontN;
 		_repeat.popFrontN(_frontSize);
 	}
+
+	void frequency(F frequency)
+	{
+		_generator.frequency = frequency;
+	}
 }
+auto repeatingGenerator(G)(G generator, size_t frontSize = 1)
+{
+	import std.traits : TemplateArgsOf;
+	alias args = TemplateArgsOf!G;
+	return RepeatingGenerator!(G, args[0], args[1])(generator, frontSize);
+}
+/+
 unittest
 {
 	auto r = [1, 2, 3, 4, 5];
@@ -95,6 +204,7 @@ unittest
 	gen.popFront();
 	assert(gen.front.equal([1, 2]));
 }
++/
 
 private
 struct VariableStepIota(B, E, S)
