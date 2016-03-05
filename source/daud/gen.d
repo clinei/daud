@@ -8,28 +8,159 @@ auto noise(T)()
 	return generate!(() => uniform!"[]"(T(-1), T(1)));
 }
 
-auto sine(T)(uint frequency, ulong sampleRate)
+interface Generator(T, F)
 {
-	import std.math : PI;
-	import std.algorithm : map;
-	import std.math : sin;
-	return saw!T(frequency, sampleRate, 2 * PI, 0).map!sin;
+	void frequency(F frequency);
 }
 
-auto saw(T)(uint frequency, ulong sampleRate, T scale = 1, T offset = -(1 / 2))
+final class WrappingSine(T, F) : Generator!(T, F)
 {
-	// bigger frequency => smaller period
+	WrappingSaw!(T, F) _saw;
 
-	import core.time : seconds;
-	auto period = 1.seconds / frequency;
+	this(F frequency = 440, uint sampleRate = 48_000)
+	{
+		_saw = new typeof(_saw)(frequency, sampleRate);
+	}
 
-	// smaller period => bigger step
+	enum bool empty = false;
 
-	T step = T(1.seconds / period) / T(sampleRate);
+	T front()
+	{
+		import std.math : sin, PI;
+		return sin( (_saw.front / T.max + 1) * PI * 2);
+	}
 
-	import std.range : iota;
-	import std.math : PI;
-	import std.algorithm : map;
-	import std.math : sin;
-	return iota!(T, T, T)(offset, scale - offset, step * scale);
+	void popFront()
+	{
+		_saw.popFront();
+	}
+
+	F frequency()
+	{
+		return _saw.frequency * 2;
+	}
+	void frequency(F newFrequency)
+	{
+		_saw.frequency = newFrequency / 2;
+	}
+}
+auto wrappingSine(T, F)(F frequency, uint sampleRate = 48_000)
+{
+	return new WrappingSine!(T, F)(frequency, sampleRate);
+}
+
+final class WrappingSaw(T, F) : Generator!(T, F)
+{
+	F _frequency;
+
+	uint _sampleRate;
+
+	WrappingIota!T _iota;
+
+	this(F frequency = 440, uint sampleRate = 48_000)
+	{
+		_sampleRate = sampleRate;
+		this.frequency(frequency);
+	}
+
+	enum bool empty = false;
+
+	T front()
+	{
+		return _iota.front;
+	}
+
+	void popFront()
+	{
+		_iota.popFront();
+	}
+
+	T step()
+	{
+		return T(_frequency) / T(_sampleRate) * T.max;
+	}
+
+	F frequency()
+	{
+		return _frequency;
+	}
+	void frequency(F newFrequency)
+	{
+		_frequency = newFrequency;
+		_iota.step = this.step;
+	}
+}
+auto wrappingSaw(T, F)(F frequency, uint sampleRate = 48_000)
+{
+	return new WrappingSaw!(T, F)(frequency, sampleRate);
+}
+
+struct WrappingIota(T)
+{
+	import std.traits : isFloatingPoint;
+	static if (isFloatingPoint!T)
+	{
+		T _curr = -T.max;
+	}
+	else
+	{
+		T _curr = T.min;
+	}
+	T _step;
+
+	this(T step)
+	{
+		this.step(step);
+		{
+			_curr = -T.max;
+		}
+	}
+
+	this(T step, T curr)
+	{
+		this(step);
+		_curr = curr;
+	}
+
+	T step()
+	{
+		return _step;
+	}
+	void step(T newStep)
+	{
+		_step = newStep;
+	}
+
+	enum bool empty = false;
+
+	T front()
+	{
+		return _curr;
+	}
+
+	void popFront()
+	{
+		import std.traits : isFloatingPoint;
+		static if (isFloatingPoint!T)
+		{
+			if (_curr + step == T.infinity)
+			{
+				auto over = _step - (T.max - _curr);
+				_curr = -T.max + over;
+			}
+			else if (_curr + _step == -T.infinity)
+			{
+				auto under = _step + (T.max + _curr);
+				_curr = T.max - under;
+			}
+			else
+			{
+				_curr += step;
+			}
+		}
+		else
+		{
+			_curr += _step;
+		}
+	}
 }
